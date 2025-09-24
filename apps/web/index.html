@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Research Assistant</title>
+
+<style>
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 16px; }
+  #out { white-space: pre-wrap; background:#111; color:#eee; padding:12px; border-radius:8px; min-height: 160px;}
+  .row{display:flex; gap:8px; margin:8px 0}
+  input[type=text]{flex:1; padding:10px; font-size:16px}
+  button{padding:10px 14px; font-size:16px; cursor:pointer}
+</style>
+
+<h1>Personal Research Assistant</h1>
+<p>Type a question or paste a URL and click “Summarize URL”.</p>
+
+<div class="row">
+  <input id="msg" type="text" placeholder="Ask something… or paste a URL" />
+  <button id="send">Chat</button>
+  <button id="sum">Summarize URL</button>
+</div>
+
+<h3>Output</h3>
+<pre id="out"></pre>
+
+<script>
+  // ---------- API base (edit PROD_API after deploy) ----------
+  const DEV_API  = 'http://localhost:5173';              // from `npx wrangler dev`
+  const PROD_API = 'https://<your-worker>.workers.dev';   // replace after `wrangler deploy`
+  const BASE = (location.hostname === 'localhost') ? DEV_API : PROD_API;
+
+  const out = document.getElementById('out');
+  const msg = document.getElementById('msg');
+  function log(line){ out.textContent += (out.textContent ? "\n" : "") + line; out.scrollTop = out.scrollHeight; }
+
+  document.getElementById('send').onclick = async () => {
+    const userMsg = msg.value.trim();
+    if (!userMsg) return;
+    msg.value = "";
+    log(`You: ${userMsg}`);
+    try {
+      const r = await fetch(`${BASE}/chat`, {
+        method:'POST',
+        headers:{'content-type':'application/json'},
+        body: JSON.stringify({ userId: 'demo-user', userMsg })
+      });
+      if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+      const { answer } = await r.json();
+      log(`Bot: ${answer}`);
+    } catch (e) {
+      log(`❌ Chat error: ${e}`);
+    }
+  };
+
+  document.getElementById('sum').onclick = async () => {
+    const url = msg.value.trim();
+    if (!/^https?:\/\//.test(url)) { alert('Paste a full URL (https://...) in the box first.'); return; }
+    msg.value = "";
+    log(`Summarizing: ${url}`);
+    try {
+      const start = await fetch(`${BASE}/summarize`, {
+        method:'POST',
+        headers:{'content-type':'application/json'},
+        body: JSON.stringify({ url })
+      }).then(r=>r.json());
+
+      const status = await fetch(`${BASE}/summarize/status?id=${start.id}`).then(r=>r.json());
+      const maybeSummary = status?.result?.summary || status?.summary || JSON.stringify(status);
+      log(`Summary: ${maybeSummary}`);
+    } catch (e) {
+      log(`❌ Summarize error: ${e}`);
+    }
+  };
+</script>
+</html>
